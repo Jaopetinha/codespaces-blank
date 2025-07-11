@@ -1,0 +1,7 @@
+{
+  "liveServer.settings.https": {
+    "enable": true,
+    "cert": "/home/joao/.vscode-ssl/server.crt",
+    "key": "/home/joao/.vscode-ssl/server.key"
+  }
+}
