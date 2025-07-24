@@ -91,7 +91,7 @@
                 </form>
 
                 <div class="participants-list">
-                    <h3>Participantes Cadastrados</h3>
+                    <h3>Participantes Cadastrados (<span id="participantsCount">0</span>)</h3>
                     <div id="participantsContainer"></div>
                 </div>
             </div>
@@ -119,7 +119,9 @@
                 </div>
                 <p>Clique no botão abaixo para sortear o ganhador entre os participantes cadastrados.</p>
                 <button id="drawButton" class="btn btn-block">Sortear Ganhador</button>
-                <button id="clearParticipantsBtn" class="btn btn-block" style="background:#eee; color:#333; margin-top:10px; display:none;">Limpar Lista de Participantes</button>
+                <button id="clearParticipantsBtn" class="btn btn-block" style="background:#dc3545; color:#fff; margin-top:10px; display:none;">Limpar Lista de Participantes</button>
+                <button id="clearWinnersBtn" class="btn btn-block" style="background:#dc3545; color:#fff; margin-top:10px; display:none;">Limpar Histórico de Ganhadores</button>
+                <button id="clearAllDataBtn" class="btn btn-block" style="background:#dc3545; color:#fff; margin-top:10px; display:none;">Limpar Todos os Dados</button>
                 <div id="winnerDisplay" class="winner-display">
                     <h3>Parabéns ao ganhador!</h3>
                     <div id="winnerInfo" class="winner-info"></div>
@@ -280,6 +282,10 @@
 
         .btn:hover {
             background-color: var(--primary-dark);
+        }
+
+        .btn[style*="background:#dc3545"]:hover {
+            background-color: #c82333 !important;
         }
 
         .btn-block {
@@ -548,11 +554,15 @@
         // Atualiza lista de participantes e UI do sorteio ao cadastrar
         function updateParticipantsList() {
             participantsContainer.innerHTML = '';
+            const participantsCount = document.getElementById('participantsCount');
+            
             if (participants.length === 0) {
                 participantsContainer.innerHTML = '<p>Nenhum participante cadastrado ainda.</p>';
                 numParticipants.textContent = 0;
+                if (participantsCount) participantsCount.textContent = 0;
                 return;
             }
+            
             participants.forEach((participant, index) => {
                 const instagram = participant.instagram ? `<span style="color:#888;">${participant.instagram}</span>` : '';
                 const participantElement = document.createElement('div');
@@ -564,41 +574,67 @@
                 `;
                 participantsContainer.appendChild(participantElement);
             });
+            
             numParticipants.textContent = participants.length;
+            if (participantsCount) participantsCount.textContent = participants.length;
         }
         updateParticipantsList();
 
-        // Atualiza lista ao cadastrar novo participante
-        registrationForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const name = document.getElementById('name').value.trim();
-            const phone = document.getElementById('phone').value.trim();
-            const instagram = document.getElementById('instagram').value.trim();
-            if (!name || !phone) return;
-            participants.push({ name, phone, instagram });
-            localStorage.setItem('participants', JSON.stringify(participants));
-            updateParticipantsList();
-            updateDrawUI();
-            registrationForm.reset();
-        });
+        // Função para cadastrar participante já está implementada abaixo com validação de duplicatas
 
         // Limpar lista de participantes (apenas proprietário)
         const clearParticipantsBtn = document.getElementById('clearParticipantsBtn');
+        const clearWinnersBtn = document.getElementById('clearWinnersBtn');
+        const clearAllDataBtn = document.getElementById('clearAllDataBtn');
+        
         clearParticipantsBtn.onclick = function() {
-            if (confirm('Tem certeza que deseja limpar a lista de participantes?')) {
+            if (confirm('Tem certeza que deseja limpar a lista de participantes? Esta ação não pode ser desfeita.')) {
                 participants = [];
                 localStorage.setItem('participants', JSON.stringify(participants));
                 updateParticipantsList();
                 updateDrawUI();
                 winnerDisplay.style.display = 'none';
+                alert('Lista de participantes limpa com sucesso!');
+            }
+        };
+
+        clearWinnersBtn.onclick = function() {
+            if (confirm('Tem certeza que deseja limpar o histórico de ganhadores? Esta ação não pode ser desfeita.')) {
+                localStorage.setItem('winners', JSON.stringify([]));
+                updateWinnersList();
+                alert('Histórico de ganhadores limpo com sucesso!');
+            }
+        };
+
+        clearAllDataBtn.onclick = function() {
+            if (confirm('ATENÇÃO: Esta ação irá apagar TODOS os dados (participantes, ganhadores, prêmio e data). Tem certeza que deseja continuar? Esta ação não pode ser desfeita.')) {
+                if (confirm('Confirma novamente? TODOS os dados serão perdidos!')) {
+                    // Limpa todos os dados
+                    participants = [];
+                    localStorage.setItem('participants', JSON.stringify(participants));
+                    localStorage.setItem('winners', JSON.stringify([]));
+                    localStorage.removeItem('drawPrize');
+                    localStorage.removeItem('drawDate');
+                    
+                    // Atualiza todas as interfaces
+                    updateParticipantsList();
+                    updateDrawUI();
+                    updateWinnersList();
+                    winnerDisplay.style.display = 'none';
+                    
+                    alert('Todos os dados foram limpos com sucesso!');
+                }
             }
         };
 
         // Exibe ou oculta funcionalidades do proprietário
         function updateOwnerUI() {
-            document.getElementById('draw').style.display = isOwnerLoggedIn() ? '' : 'none';
-            ownerLoginBtn.style.display = isOwnerLoggedIn() ? 'none' : '';
-            clearParticipantsBtn.style.display = isOwnerLoggedIn() ? '' : 'none';
+            const isOwner = isOwnerLoggedIn();
+            document.getElementById('draw').style.display = isOwner ? '' : 'none';
+            ownerLoginBtn.style.display = isOwner ? 'none' : '';
+            clearParticipantsBtn.style.display = isOwner ? '' : 'none';
+            clearWinnersBtn.style.display = isOwner ? '' : 'none';
+            clearAllDataBtn.style.display = isOwner ? '' : 'none';
         }
 
         ownerLoginForm.addEventListener('submit', function(e) {
@@ -728,23 +764,45 @@
             goToTab('register');
         }
 
-        // --- NOVO: Impedir telefone repetido ---
+        // --- NOVO: Impedir participantes repetidos (nome E telefone) ---
+        function normalizeString(str) {
+            return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        }
+
+        function checkDuplicateParticipant(name, phone) {
+            const normalizedName = normalizeString(name);
+            const normalizedPhone = phone.replace(/\D/g, ''); // Remove caracteres não numéricos
+            
+            return participants.some(p => {
+                const existingName = normalizeString(p.name);
+                const existingPhone = p.phone.replace(/\D/g, '');
+                return existingName === normalizedName || existingPhone === normalizedPhone;
+            });
+        }
+
         registrationForm.addEventListener('submit', function(e) {
             e.preventDefault();
             const name = document.getElementById('name').value.trim();
             const phone = document.getElementById('phone').value.trim();
             const instagram = document.getElementById('instagram').value.trim();
-            if (!name || !phone) return;
-            // Checa se telefone já existe
-            if (participants.some(p => p.phone === phone)) {
-                alert('Este telefone já está cadastrado para o sorteio!');
+            
+            if (!name || !phone) {
+                alert('Por favor, preencha nome e telefone.');
                 return;
             }
+            
+            // Verifica se já existe participante com mesmo nome ou telefone
+            if (checkDuplicateParticipant(name, phone)) {
+                alert('❌ Este participante já está cadastrado no sorteio!\n\nNão é permitido cadastrar:\n• O mesmo nome\n• O mesmo telefone\n\nCada pessoa pode participar apenas uma vez.');
+                return;
+            }
+            
             participants.push({ name, phone, instagram });
             localStorage.setItem('participants', JSON.stringify(participants));
             updateParticipantsList();
             updateDrawUI();
             registrationForm.reset();
+            alert('✅ Participante cadastrado com sucesso no sorteio!');
         }, true);
     </script>
 </body>
