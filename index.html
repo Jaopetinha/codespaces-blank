@@ -33,9 +33,9 @@
     <header>
         <div class="container">
             <nav>
-                <a href="#" class="logo" style="display:flex;align-items:center;gap:10px;">
-                    <img src="kaynan-logo.png" alt="Kaynan Pipas Logo" style="height:48px;width:48px;object-fit:contain;">
-                    <span style="font-size:28px;font-weight:700;color:var(--primary-color);">InstantPrize</span>
+                <a href="#" class="logo">
+                    <img src="kaynan-logo.png" alt="Logo" loading="eager" onerror="this.style.display='none';">
+                    <span>🏆 InstantPrize</span>
                 </a>
                 <ul class="nav-links">
                     <li><a href="https://www.google.com" class="tab-link" data-tab="about">Sobre</a></li>
@@ -185,10 +185,41 @@
         }
 
         .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             font-size: 28px;
             font-weight: 700;
             color: var(--primary-color);
             text-decoration: none;
+            min-height: 48px;
+        }
+
+        .logo img {
+            height: 48px;
+            width: 48px;
+            object-fit: contain;
+            flex-shrink: 0;
+            display: block;
+            border-radius: 6px;
+        }
+
+        /* Fallback case se a imagem não carregar */
+        .logo img[src="kaynan-logo.png"]:before {
+            content: "🏆";
+            display: inline-block;
+            font-size: 32px;
+        }
+
+        .logo span {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        /* Quando a imagem não está presente, centralizar melhor o texto */
+        .logo:not(:has(img[style*="display: block"])) span {
+            padding-left: 0;
         }
 
         .nav-links {
@@ -653,6 +684,18 @@
 
         // Ao carregar a página, atualiza UI
         updateOwnerUI();
+
+        // Verificar carregamento da logo
+        const logoImg = document.querySelector('.logo img');
+        if (logoImg) {
+            logoImg.onload = function() {
+                console.log('Logo carregada com sucesso');
+            };
+            logoImg.onerror = function() {
+                console.log('Logo não carregou, usando fallback');
+                this.style.display = 'none';
+            };
+        }
 
         // Opcional: logout ao pressionar ESC dentro do modal
         document.addEventListener('keydown', function(e) {
